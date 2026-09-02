@@ -6,6 +6,7 @@ import Navbar      from '../components/Navbar';
 import StatCard    from '../components/StatCard';
 import SalesTable  from '../components/SalesTable';
 import { getSupervisores, getUsuarios } from '../utils/api';
+import { roleKey, isAdmin, isSeller }   from '../utils/roles';
 import { toPng }               from 'html-to-image';
 import ProgressBar from '../components/ProgressBar';
 
@@ -106,6 +107,7 @@ export default function Dashboard() {
     const [supervisorFilter, setSupervisorFilter]         = useState('');
     const [supervisorVendedores, setSupervisorVendedores] = useState(null); // null = todos
     const [supervisorCarregando, setSupervisorCarregando] = useState(false);
+    const supervisorReqRef = useRef(0); // id da requisição mais recente do filtro
 
     // Exportação da tabela como imagem
     const exportRef = useRef(null);
@@ -123,7 +125,7 @@ export default function Dashboard() {
     }, [apiStatus, logout, navigate]);
     // Admin: carrega a lista de supervisores para o filtro
     useEffect(() => {
-        if (user?.role !== 'ADMIN') return;
+        if (!isAdmin(user?.role)) return;
 
         let cancelled = false;
         getSupervisores()
@@ -135,7 +137,8 @@ export default function Dashboard() {
 
     // Ao escolher um supervisor, busca os vendedores vinculados a ele
     async function handleSupervisorChange(e) {
-        const { value } = e.target;
+        const { value }   = e.target;
+        const requestId   = ++supervisorReqRef.current;
         setSupervisorFilter(value);
 
         if (!value) {
@@ -143,14 +146,20 @@ export default function Dashboard() {
             return;
         }
 
+        // Limpa a seleção anterior enquanto carrega a nova (evita exibir dados errados)
+        setSupervisorVendedores(null);
         setSupervisorCarregando(true);
         try {
             const usuarios = await getUsuarios({ codsupervisor: Number(value) });
+            if (supervisorReqRef.current !== requestId) return; // resposta desatualizada
             setSupervisorVendedores(usuarios.map(u => u.CODUSUR));
         } catch {
+            if (supervisorReqRef.current !== requestId) return; // resposta desatualizada
             setSupervisorVendedores(null);
         } finally {
-            setSupervisorCarregando(false);
+            if (supervisorReqRef.current === requestId) {
+                setSupervisorCarregando(false);
+            }
         }
     }
 
@@ -220,7 +229,7 @@ export default function Dashboard() {
         if (apiStatus === 403)            return <AccessDenied />;
         if (error)                        return <ErrorState message={error} onRetry={refresh} />;
 
-        const isUser = user?.role === 'USER';
+        const isUser = isSeller(user?.role);
 
         return (
             <>
@@ -326,7 +335,7 @@ export default function Dashboard() {
                 {/* Cabeçalho da página */}
                 <div className="mb-5">
                     <h1 className="text-lg font-bold text-gray-800">
-                        {ROLE_TITLES[user?.role] ?? 'Dashboard'}
+                        {ROLE_TITLES[roleKey(user?.role)] ?? 'Dashboard'}
                     </h1>
                     <p className="text-xs text-gray-400 mt-0.5">
                         Atualização automática a cada 30 segundos
@@ -370,7 +379,7 @@ export default function Dashboard() {
                         </div>
                     </div>
                     {/* Filtro por supervisor (somente admin) */}
-                    {user?.role === 'ADMIN' && (
+                    {isAdmin(user?.role) && (
                         <div>
                             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
                                 Supervisor

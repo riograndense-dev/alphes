@@ -643,7 +643,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -936,7 +936,7 @@
             "in": "path",
             "required": true,
             "schema": {
-              "type": "integer",
+              "type": "string",
               "title": "Prest"
             }
           }
@@ -1005,7 +1005,7 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -1575,9 +1575,6 @@
           },
           "PREST": {
             "anyOf": [
-              {
-                "type": "integer"
-              },
               {
                 "type": "string"
               },

@@ -16,8 +16,8 @@
 - Data padrão do dia atual (hoje/hoje)
 - Modal com informações específicas de cada vendedor (exibido quando selecionado na tabelas)
 - Tela própria para o vendedor (user), com informações específicas dele e somente dele
-- Filtro de vendedores por supervisor (somente admin)
 - Botão para exportar a tabela para uma imagem (PNG)
+- Filtro de vendedores por supervisor (somente admin)
 
 # Para adicioar agora:
 

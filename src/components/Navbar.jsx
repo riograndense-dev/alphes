@@ -1,4 +1,5 @@
 ﻿import { useAuth } from '../contexts/AuthContext';
+import { roleKey } from '../utils/roles';
 import { useNavigate } from 'react-router-dom';
 
 const ROLE_LABELS = {
@@ -22,7 +23,7 @@ export default function Navbar({ onRefresh, lastUpdate, loading }) {
         navigate('/login', { replace: true });
     }
 
-    const roleLabel = ROLE_LABELS[user?.role] ?? user?.role ?? '';
+    const roleLabel = ROLE_LABELS[roleKey(user?.role)] ?? user?.role ?? '';
     const updateStr = lastUpdate
         ? lastUpdate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
         : null;

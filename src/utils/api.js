@@ -84,4 +84,27 @@ export async function getVendas(datai, dataf, signal) {
         { datai, dataf, codfilial: 1 },
         signal ? { signal } : {}
     );
+}
+
+// ─── Supervisores e Vendedores ───────────────────────────────────────────
+
+/**
+ * Lista de supervisores.
+ * Retorna SupervisorResponse[]: { CODSUPERVISOR: number, NOME: string|null }
+ */
+export async function getSupervisores(signal) {
+    return api.getData('/manager/', {}, signal ? { signal } : {});
+}
+
+/**
+ * Lista de vendedores (Winthor).
+ * Retorna UsuarioResponse[]: { CODUSUR: number, NOME: string|null }
+ * Aceita filtros opcionais { codusur, codsupervisor }.
+ */
+export async function getUsuarios({ codusur, codsupervisor } = {}, signal) {
+    return api.getData(
+        '/user/',
+        { codusur, codsupervisor },
+        signal ? { signal } : {}
+    );
 }

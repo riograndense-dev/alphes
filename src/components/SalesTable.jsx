@@ -19,6 +19,19 @@ function calcRow(item) {
     return { vendas, meta, falta, percentual };
 }
 
+function TheadRow() {
+    return (
+        <tr className="bg-[#1E3A5F] text-white">
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Vendedor</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Meta</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Vendas</th>
+            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Falta</th>
+            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide w-44">% Meta</th>
+            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide">Clientes</th>
+        </tr>
+    );
+}
+
 function PctBadge({ pct }) {
     const cls =
         pct >= 80 ? 'bg-green-100 text-green-700' :
@@ -176,7 +189,7 @@ function SellerModal({ item, onClose }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────
 
-export default function SalesTable({ data }) {
+export default function SalesTable({ data, exportRef, exportInfo = null }) {
     const [selectedItem, setSelectedItem] = useState(null);
 
     if (!data || data.length === 0) {
@@ -199,6 +212,32 @@ export default function SalesTable({ data }) {
                 <SellerModal item={selectedItem} onClose={() => setSelectedItem(null)} />
             )}
 
+            {/* ── Snapshot invisível para exportação como imagem ── */}
+            {exportRef && (
+                <div ref={exportRef} className="export-snapshot">
+                    {exportInfo && (
+                        <div className="mb-4">
+                            <p className="text-lg font-bold text-[#1E3A5F]">
+                                {exportInfo.title ?? 'Vendas por Vendedor'}
+                            </p>
+                            {exportInfo.subtitle && (
+                                <p className="text-sm text-gray-500 mt-0.5">{exportInfo.subtitle}</p>
+                            )}
+                        </div>
+                    )}
+                    <table className="w-full text-sm border-collapse">
+                        <thead>
+                            <TheadRow />
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {data.map((item, idx) => (
+                                <TableRow key={item.CODUSUR} item={item} isOdd={idx % 2 !== 0} />
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            )}
+
             {/* ── Mobile: Cards (< md) ── */}
             <div className="md:hidden space-y-3">
                 {data.map(item => (
@@ -210,14 +249,7 @@ export default function SalesTable({ data }) {
             <div className="hidden md:block overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
                 <table className="w-full text-sm border-collapse">
                     <thead>
-                        <tr className="bg-[#1E3A5F] text-white">
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide">Vendedor</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Meta</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Vendas</th>
-                            <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wide">Falta</th>
-                            <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide w-44">% Meta</th>
-                            <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide">Clientes</th>
-                        </tr>
+                        <TheadRow />
                     </thead>
                     <tbody className="divide-y divide-gray-100">
                         {data.map((item, idx) => (

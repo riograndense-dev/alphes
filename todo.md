@@ -9,12 +9,16 @@
 - Margem acumulada mês
 - Margem acumulada dia
 
-# Adicionar URGENTEMENTE:
+# Adicionados recentemente:
 
 - Média de pedidos geral
 - Barra de pesquisa na tabela de vendedores
 - Data padrão do dia atual (hoje/hoje)
 - Modal com informações específicas de cada vendedor (exibido quando selecionado na tabelas)
-- Tela própia para o vendedor (user), com informações específias dele e somente dele
+- Tela própria para o vendedor (user), com informações específicas dele e somente dele
+- Filtro de vendedores por supervisor (somente admin)
+- Botão para exportar a tabela para uma imagem (PNG)
+
+# Para adicioar agora:
 
 api documentada em docs/openapi.json

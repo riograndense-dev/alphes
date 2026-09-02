@@ -1,10 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate }         from 'react-router-dom';
 import { useAuth }             from '../contexts/AuthContext';
 import { useDashboard }        from '../hooks/useDashboard';
 import Navbar      from '../components/Navbar';
 import StatCard    from '../components/StatCard';
 import SalesTable  from '../components/SalesTable';
+import { getSupervisores, getUsuarios } from '../utils/api';
+import { toPng }               from 'html-to-image';
+import ProgressBar from '../components/ProgressBar';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -98,6 +101,15 @@ export default function Dashboard() {
     
     // Barra de pesquisa
     const [searchTerm, setSearchTerm] = useState('');
+    // Filtro por supervisor (somente admin)
+    const [supervisores, setSupervisores]                 = useState([]);
+    const [supervisorFilter, setSupervisorFilter]         = useState('');
+    const [supervisorVendedores, setSupervisorVendedores] = useState(null); // null = todos
+    const [supervisorCarregando, setSupervisorCarregando] = useState(false);
+
+    // Exportação da tabela como imagem
+    const exportRef = useRef(null);
+    const [exporting, setExporting] = useState(false);
 
     const { data, loading, error, apiStatus, lastUpdate, refresh } =
         useDashboard(datai, dataf);
@@ -109,9 +121,68 @@ export default function Dashboard() {
             navigate('/login', { state: { sessionExpired: true }, replace: true });
         }
     }, [apiStatus, logout, navigate]);
+    // Admin: carrega a lista de supervisores para o filtro
+    useEffect(() => {
+        if (user?.role !== 'ADMIN') return;
+
+        let cancelled = false;
+        getSupervisores()
+            .then(list => { if (!cancelled) setSupervisores(list || []); })
+            .catch(() => { if (!cancelled) setSupervisores([]); });
+
+        return () => { cancelled = true; };
+    }, [user?.role]);
+
+    // Ao escolher um supervisor, busca os vendedores vinculados a ele
+    async function handleSupervisorChange(e) {
+        const { value } = e.target;
+        setSupervisorFilter(value);
+
+        if (!value) {
+            setSupervisorVendedores(null);
+            return;
+        }
+
+        setSupervisorCarregando(true);
+        try {
+            const usuarios = await getUsuarios({ codsupervisor: Number(value) });
+            setSupervisorVendedores(usuarios.map(u => u.CODUSUR));
+        } catch {
+            setSupervisorVendedores(null);
+        } finally {
+            setSupervisorCarregando(false);
+        }
+    }
+
+    // Exporta a tabela (filtrada) como imagem PNG
+    async function handleExport() {
+        const node = exportRef.current;
+        if (!node) return;
+
+        setExporting(true);
+        try {
+            const dataUrl = await toPng(node, {
+                pixelRatio: 2,
+                backgroundColor: '#ffffff',
+                cacheBust: true,
+                style: { opacity: '1' },
+            });
+            const link = document.createElement('a');
+            link.download = `vendas-por-vendedor-${datai}-${dataf}.png`;
+            link.href = dataUrl;
+            link.click();
+        } catch (err) {
+            console.error('Falha ao exportar a tabela como imagem:', err);
+        } finally {
+            setExporting(false);
+        }
+    }
 
     // ── Totais ─────────────────────────────────────────────────────────────
-    const totals = data.reduce(
+    const dataPorSupervisor = Array.isArray(supervisorVendedores)
+        ? data.filter(item => supervisorVendedores.includes(item.CODUSUR))
+        : data;
+    const totals = dataPorSupervisor.reduce(
         (acc, item) => {
             acc.vendas += parseFloat(item.PVENDA) || 0;
             acc.meta   += parseFloat(item.META)   || 0;
@@ -134,11 +205,15 @@ export default function Dashboard() {
         'border-red-400';
 
     // ── Filtro de Pesquisa ───────────────────────────────────────────────────
-    const filteredData = data.filter(item => 
+    const filteredData = dataPorSupervisor.filter(item => 
         (item.NOME || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
         String(item.CODUSUR).includes(searchTerm)
     );
 
+    // Supervisor selecionado (exibido também no cabeçalho da imagem exportada)
+    const supervisorSelecionado = supervisores.find(
+        sup => String(sup.CODSUPERVISOR) === String(supervisorFilter)
+    );
     // ── Conteúdo central ───────────────────────────────────────────────────
     function renderContent() {
         if (loading && data.length === 0) return <LoadingState />;
@@ -157,7 +232,7 @@ export default function Dashboard() {
                     <StatCard
                         title="% Geral da Meta"
                         value={`${totalPct.toFixed(1)}%`}
-                        subtitle={isUser ? "Sua meta" : `${data.length} vendedor${data.length !== 1 ? 'es' : ''}`}
+                        subtitle={isUser ? "Sua meta" : `${dataPorSupervisor.length} vendedor${dataPorSupervisor.length !== 1 ? 'es' : ''}`}
                         accent={pctAccent}
                     />
                     <StatCard 
@@ -194,8 +269,8 @@ export default function Dashboard() {
                     </div>
                 ) : (
                     <>
-                        {/* Barra de pesquisa na tabela de vendedores */}
-                        <div className="mb-4">
+                        {/* Barra de pesquisa + exportação da tabela em imagem */}
+                        <div className="mb-4 flex flex-col md:flex-row gap-3 md:items-center">
                             <input
                                 type="text"
                                 placeholder="Pesquisar vendedor (nome ou RCA)..."
@@ -203,9 +278,39 @@ export default function Dashboard() {
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full md:w-96 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F] transition-all shadow-sm"
                             />
+                            <button
+                                onClick={handleExport}
+                                disabled={filteredData.length === 0 || exporting}
+                                title="Exportar a tabela como imagem PNG"
+                                className="flex items-center justify-center gap-1.5 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 hover:border-[#1E3A5F]/40 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {exporting ? (
+                                    <>
+                                        <svg className="w-4 h-4 animate-spin text-[#1E3A5F]" fill="none" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                        </svg>
+                                        Exportando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-4 h-4 text-[#1E3A5F]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                        </svg>
+                                        Exportar imagem
+                                    </>
+                                )}
+                            </button>
                         </div>
                         {/* Tabela / Cards */}
-                        <SalesTable data={filteredData} />
+                        <SalesTable
+                            data={filteredData}
+                            exportRef={exportRef}
+                            exportInfo={{
+                                title: 'Vendas por Vendedor',
+                                subtitle: `Período: ${datai} a ${dataf}${supervisorSelecionado?.NOME ? ` — ${supervisorSelecionado.NOME}` : ''}`,
+                            }}
+                        />
                     </>
                 )}
             </>
@@ -264,6 +369,38 @@ export default function Dashboard() {
                             </button>
                         </div>
                     </div>
+                    {/* Filtro por supervisor (somente admin) */}
+                    {user?.role === 'ADMIN' && (
+                        <div>
+                            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">
+                                Supervisor
+                            </p>
+                            <div className="relative">
+                                <select
+                                    value={supervisorFilter}
+                                    onChange={handleSupervisorChange}
+                                    disabled={supervisorCarregando}
+                                    className="pl-3 pr-9 py-1.5 border border-gray-200 rounded-lg text-sm text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#1E3A5F]/30 focus:border-[#1E3A5F] transition-all disabled:opacity-60"
+                                >
+                                    <option value="">Todos os supervisores</option>
+                                    {supervisores.map(sup => (
+                                        <option key={sup.CODSUPERVISOR} value={sup.CODSUPERVISOR}>
+                                            {sup.NOME || `Supervisor ${sup.CODSUPERVISOR}`}
+                                        </option>
+                                    ))}
+                                </select>
+                                {supervisorCarregando && (
+                                    <svg
+                                        className="w-4 h-4 animate-spin text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                        fill="none" viewBox="0 0 24 24"
+                                    >
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                )}
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {renderContent()}
@@ -271,3 +408,5 @@ export default function Dashboard() {
         </div>
     );
 }
+
+

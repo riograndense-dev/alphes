@@ -1,1 +1,18 @@
 @import "tailwindcss";
+
+/* ─── Snapshot invisível para exportação de imagem ─────────────────────────
+   Fica fixo, fora do fluxo, sem interagir com a UI (opacity 0 + pointer-events
+   none). O html-to-image clona este nó e sobrescreve a opacidade/posição
+   durante a captura (ver Dashboard.handleExport). */
+.export-snapshot {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: -1;
+    width: 1080px;
+    padding: 24px;
+    background-color: #ffffff;
+    font-family: "Segoe UI", Arial, sans-serif;
+    opacity: 0;
+    pointer-events: none;
+}

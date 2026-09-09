@@ -196,7 +196,7 @@ function SellerModal({ item, onClose }) {
                 Meta
               </p>
               <p className="text-base font-bold text-gray-800">
-                {!meta ? "Sem meta" : metafmtBRL(meta)}
+                {!meta ? "Sem meta" : fmtBRL(meta)}
               </p>
             </div>
             <div className="bg-gray-50 p-3 rounded-lg border border-gray-100">

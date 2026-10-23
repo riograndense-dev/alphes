@@ -24,7 +24,7 @@ export function roleKey(role) {
     if (normalized === 'admin' || normalized === 'administrador' || normalized === 'administrator') {
         return 'ADMIN';
     }
-    if (normalized === 'supervisor') {
+    if (normalized === 'supervisor' || normalized === 'manager' || normalized === 'gerente') {
         return 'SUPERVISOR';
     }
     if (normalized === 'user' || normalized === 'vendedor' || normalized === 'seller') {
@@ -43,4 +43,8 @@ export function isSupervisor(role) {
 
 export function isSeller(role) {
     return roleKey(role) === 'USER';
+}
+
+export function canManageDynamicGoals(role) {
+    return isAdmin(role);
 }

@@ -21,6 +21,7 @@
 
 # Para adicioar agora:
 
-- [x] Refresh Token
+- [x] Atualizar para suportar as metas dinâmicas da api
+- [x] Fazer um botão e um painel (apenas para admin) para poder editar as metas dinâmicas. O painel deve ter um calendário-tabela, onde pode ser observado a relação entre % das semanas do mes e % dos dias da semana
 
 api documentada em docs/openapi.json

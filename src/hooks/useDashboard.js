@@ -1,5 +1,5 @@
-﻿import { useState, useEffect, useCallback } from 'react';
-import { getVendas } from '../utils/api';
+﻿import { useState, useEffect, useCallback, useRef } from 'react';
+import { getMetasDinamicasPeriodo, getVendas } from '../utils/api';
 
 const REFRESH_INTERVAL = 30_000; // 30 segundos
 
@@ -16,14 +16,28 @@ export function useDashboard(datai, dataf) {
     const [error, setError]         = useState(null);
     const [apiStatus, setApiStatus] = useState(null); // 401 | 403 | null
     const [lastUpdate, setLastUpdate] = useState(null);
+    const metasCache = useRef({ key: null, value: null });
 
-    const fetchData = useCallback(async (signal) => {
+    const fetchData = useCallback(async (signal, forceGoals = false) => {
         setLoading(true);
         setError(null);
 
         try {
-            const result = await getVendas(datai, dataf, signal);
-            setData(result);
+            const goalsKey = `${datai}:${dataf}`;
+            const goalsPromise = !forceGoals && metasCache.current.key === goalsKey
+                ? Promise.resolve(metasCache.current.value)
+                : getMetasDinamicasPeriodo(datai, dataf, signal);
+            const [result, metasPorVendedor] = await Promise.all([
+                getVendas(datai, dataf, signal),
+                goalsPromise,
+            ]);
+            metasCache.current = { key: goalsKey, value: metasPorVendedor };
+            const dataComMetasDinamicas = result.map(item => ({
+                ...item,
+                META: metasPorVendedor.get(Number(item.CODUSUR)) || 0,
+            }));
+
+            setData(dataComMetasDinamicas);
             setApiStatus(null);
             setLastUpdate(new Date());
         } catch (err) {
@@ -59,7 +73,7 @@ export function useDashboard(datai, dataf) {
     }, [fetchData]);
 
     // Refresh manual (sem signal — componente deve estar montado)
-    const refresh = useCallback(() => fetchData(), [fetchData]);
+    const refresh = useCallback(() => fetchData(undefined, true), [fetchData]);
 
     return { data, loading, error, apiStatus, lastUpdate, refresh };
 }

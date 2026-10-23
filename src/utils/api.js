@@ -142,3 +142,86 @@ export async function getUsuarios({ codusur, codsupervisor } = {}, signal) {
         signal ? { signal } : {}
     );
 }
+
+// ─── Metas dinâmicas ────────────────────────────────────────────────────────
+
+/** Retorna as metas calculadas para uma data ISO (AAAA-MM-DD). */
+export async function getMetasDinamicasDiarias(dataReferencia, signal) {
+    return api.getData(
+        '/metas-dinamicas/diaria',
+        { data_referencia: dataReferencia },
+        signal ? { signal } : {}
+    );
+}
+
+/** Recupera a distribuição semanal e diária configurada para um mês. */
+export async function getConfiguracaoMetasDinamicas(ano, mes, signal) {
+    return api.getData(
+        `/metas-dinamicas/configuracoes/${ano}/${mes}`,
+        {},
+        signal ? { signal } : {}
+    );
+}
+
+/** Cria ou substitui a distribuição semanal e diária de um mês. */
+export async function salvarConfiguracaoMetasDinamicas(ano, mes, configuracao, signal) {
+    return api.putData(
+        `/metas-dinamicas/configuracoes/${ano}/${mes}`,
+        configuracao,
+        signal ? { signal } : {}
+    );
+}
+
+const MAX_DIAS_META_DINAMICA = 366;
+const CONCORRENCIA_METAS = 6;
+
+function datasDoPeriodo(dataInicial, dataFinal) {
+    const inicio = new Date(`${dataInicial}T00:00:00Z`);
+    const fim = new Date(`${dataFinal}T00:00:00Z`);
+
+    if (Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime()) || fim < inicio) {
+        throw new Error('Período inválido para calcular as metas dinâmicas.');
+    }
+
+    const quantidade = Math.floor((fim - inicio) / 86_400_000) + 1;
+    if (quantidade > MAX_DIAS_META_DINAMICA) {
+        throw new Error(`Selecione um período de até ${MAX_DIAS_META_DINAMICA} dias.`);
+    }
+
+    return Array.from({ length: quantidade }, (_, indice) => {
+        const data = new Date(inicio);
+        data.setUTCDate(data.getUTCDate() + indice);
+        return data.toISOString().slice(0, 10);
+    });
+}
+
+/**
+ * Soma as metas diárias por vendedor dentro do período. O limite de
+ * concorrência evita disparar dezenas de chamadas simultâneas para a API.
+ */
+export async function getMetasDinamicasPeriodo(dataInicial, dataFinal, signal) {
+    const datas = datasDoPeriodo(dataInicial, dataFinal);
+    const respostas = new Array(datas.length);
+    let proximoIndice = 0;
+
+    async function buscarProximaData() {
+        while (proximoIndice < datas.length) {
+            const indice = proximoIndice++;
+            respostas[indice] = await getMetasDinamicasDiarias(datas[indice], signal);
+        }
+    }
+
+    const trabalhadores = Math.min(CONCORRENCIA_METAS, datas.length);
+    await Promise.all(Array.from({ length: trabalhadores }, buscarProximaData));
+
+    const metasPorVendedor = new Map();
+    respostas.forEach(resposta => {
+        (resposta?.vendedores || []).forEach(vendedor => {
+            const codigo = Number(vendedor.codusur);
+            const acumulada = metasPorVendedor.get(codigo) || 0;
+            metasPorVendedor.set(codigo, acumulada + (Number(vendedor.meta_diaria) || 0));
+        });
+    });
+
+    return metasPorVendedor;
+}

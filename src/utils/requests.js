@@ -14,6 +14,33 @@ export default class Requests {
         };
     }
 
+    /**
+     * Executa o fetch sem consumir a resposta. Manter este passo separado
+     * permite que clientes autenticados tratem um 401 antes de fazer o parse.
+     */
+    async send(url, options = {}) {
+        const {
+            headers = {},
+            credentials = "include",
+            skipAuthRefresh: _skipAuthRefresh,
+            ...fetchOptions
+        } = options;
+
+        return fetch(url, {
+            ...fetchOptions,
+            credentials,
+            headers: {
+                ...this.getHeaders(),
+                ...headers,
+            },
+        });
+    }
+
+    async request(url, options = {}) {
+        const response = await this.send(url, options);
+        return this.handleResponse(response);
+    }
+
     async handleResponse(response) {
         const contentType =
             response.headers.get("content-type") || "";
@@ -24,11 +51,13 @@ export default class Requests {
                 : null;
 
         if (!response.ok) {
-            throw new Error(
+            const error = new Error(
                 data?.detail ||
                 data?.message ||
                 `Erro HTTP ${response.status}`
             );
+            error.status = response.status;
+            throw error;
         }
 
         return data;
@@ -59,14 +88,7 @@ export default class Requests {
 
             }
 
-            const response =
-                await fetch(url, {
-                    headers:
-                        this.getHeaders(),
-                    ...(options.signal && { signal: options.signal }),
-                });
-
-            return this.handleResponse(response);
+            return this.request(url, options);
 
         } catch (error) {
 
@@ -79,74 +101,39 @@ export default class Requests {
     //POST
     async postData(endpoint, data, options = {}) {
 
-        const response =
-            await fetch(
-                `${this.apiUrl}${endpoint}`,
-                {
-                    method: "POST",
-                    headers:
-                        this.getHeaders(),
-                    body:
-                        JSON.stringify(data),
-                    ...(options.signal && { signal: options.signal }),
-                }
-            );
-
-        return this.handleResponse(response);
+        return this.request(`${this.apiUrl}${endpoint}`, {
+            ...options,
+            method: "POST",
+            body: JSON.stringify(data),
+        });
     }
 
     //PUT
     async putData(endpoint, data, options = {}) {
 
-        const response =
-            await fetch(
-                `${this.apiUrl}${endpoint}`,
-                {
-                    method: "PUT",
-                    headers:
-                        this.getHeaders(),
-                    body:
-                        JSON.stringify(data),
-                    ...(options.signal && { signal: options.signal }),
-                }
-            );
-
-        return this.handleResponse(response);
+        return this.request(`${this.apiUrl}${endpoint}`, {
+            ...options,
+            method: "PUT",
+            body: JSON.stringify(data),
+        });
     }
 
     //PATCH
     async patchData(endpoint, data, options = {}) {
 
-        const response =
-            await fetch(
-                `${this.apiUrl}${endpoint}`,
-                {
-                    method: "PATCH",
-                    headers:
-                        this.getHeaders(),
-                    body:
-                        JSON.stringify(data),
-                    ...(options.signal && { signal: options.signal }),
-                }
-            );
-
-        return this.handleResponse(response);
+        return this.request(`${this.apiUrl}${endpoint}`, {
+            ...options,
+            method: "PATCH",
+            body: JSON.stringify(data),
+        });
     }
 
     //DELETE
     async deleteData(endpoint, options = {}) {
 
-        const response =
-            await fetch(
-                `${this.apiUrl}${endpoint}`,
-                {
-                    method: "DELETE",
-                    headers:
-                        this.getHeaders(),
-                    ...(options.signal && { signal: options.signal }),
-                }
-            );
-
-        return this.handleResponse(response);
+        return this.request(`${this.apiUrl}${endpoint}`, {
+            ...options,
+            method: "DELETE",
+        });
     }
 }

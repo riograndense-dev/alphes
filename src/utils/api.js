@@ -2,36 +2,69 @@ import Requests from './requests';
 
 const API_URL = import.meta.env.VITE_API_URL;
 
-/**
- * Subclasse que anexa o HTTP status ao erro,
- * permitindo detectar 401/403 nos componentes.
- */
+/** Cliente autenticado com renovação automática e uma única repetição por 401. */
 class AuthedRequests extends Requests {
-    async handleResponse(response) {
-        const contentType = response.headers.get('content-type') || '';
-        const data = contentType.includes('application/json')
-            ? await response.json()
-            : null;
+    constructor(apiUrl) {
+        super(apiUrl);
+        this.refreshPromise = null;
+    }
 
-        if (!response.ok) {
-            const err = new Error(
-                data?.detail || data?.message || `Erro HTTP ${response.status}`
-            );
-            err.status = response.status;
-            throw err;
+    async refreshAccessToken() {
+        if (!this.refreshPromise) {
+            this.refreshPromise = this.send(`${this.apiUrl}/auth/refresh`, {
+                method: 'POST',
+                body: JSON.stringify({}),
+                skipAuthRefresh: true,
+            })
+                .then(response => this.handleResponse(response))
+                .then(data => {
+                    if (!data?.access_token) {
+                        throw new Error('A API não retornou um access token válido.');
+                    }
+
+                    localStorage.setItem('token', data.access_token);
+                    return data.access_token;
+                })
+                .finally(() => {
+                    this.refreshPromise = null;
+                });
         }
 
-        return data;
+        return this.refreshPromise;
+    }
+
+    async request(url, options = {}) {
+        const { skipAuthRefresh = false, ...requestOptions } = options;
+        const tokenUsed = localStorage.getItem('token');
+        let response = await this.send(url, requestOptions);
+
+        if (response.status !== 401 || skipAuthRefresh) {
+            return this.handleResponse(response);
+        }
+
+        // Outra chamada pode ter renovado o token enquanto esta estava em voo.
+        if (localStorage.getItem('token') === tokenUsed) {
+            try {
+                await this.refreshAccessToken();
+            } catch {
+                localStorage.removeItem('token');
+                return this.handleResponse(response);
+            }
+        }
+
+        // Erros de rede e aborts da repetição devem chegar intactos ao chamador.
+        response = await this.send(url, requestOptions);
+        return this.handleResponse(response);
     }
 }
 
 const api = new AuthedRequests(API_URL);
 
-// ─── Auth ──────────────────────────────────────────────────────────────────
+// ─── Auth ───────────────────────────────────────────────────────────────────
 
 /**
  * Login via OAuth2 Password Flow (form-data, não JSON).
- * Salva o access_token no localStorage.
+ * Salva o access_token no localStorage; o refresh token fica no cookie HttpOnly.
  */
 export async function login(username, password) {
     const formData = new URLSearchParams();
@@ -42,6 +75,7 @@ export async function login(username, password) {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
         body: formData.toString(),
+        credentials: 'include',
     });
 
     if (!response.ok) {
@@ -64,13 +98,13 @@ export async function getMe() {
 export async function logout() {
     localStorage.removeItem('token');
     try {
-        await api.postData('/auth/logout');
+        await api.postData('/auth/logout', {}, { skipAuthRefresh: true });
     } catch {
-        // ignora erros no logout
+        // Ignora erros no logout local.
     }
 }
 
-// ─── Relatórios ───────────────────────────────────────────────────────────
+// ─── Relatórios ─────────────────────────────────────────────────────────────
 
 /**
  * Relatório de vendas por vendedor no período informado.
@@ -86,7 +120,7 @@ export async function getVendas(datai, dataf, signal) {
     );
 }
 
-// ─── Supervisores e Vendedores ───────────────────────────────────────────
+// ─── Supervisores e Vendedores ──────────────────────────────────────────────
 
 /**
  * Lista de supervisores.
@@ -107,4 +141,4 @@ export async function getUsuarios({ codusur, codsupervisor } = {}, signal) {
         { codusur, codsupervisor },
         signal ? { signal } : {}
     );
-}
+}

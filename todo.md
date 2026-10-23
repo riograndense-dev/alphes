@@ -21,4 +21,6 @@
 
 # Para adicioar agora:
 
+- [x] Refresh Token
+
 api documentada em docs/openapi.json
